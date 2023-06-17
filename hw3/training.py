@@ -58,6 +58,7 @@ class Trainer(abc.ABC):
 
         best_acc = None
         epochs_without_improvement = 0
+        prev_loss = float('inf')
 
         checkpoint_filename = None
         if checkpoints is not None:
@@ -85,7 +86,24 @@ class Trainer(abc.ABC):
             # - Implement early stopping. This is a very useful and
             #   simple regularization technique that is highly recommended.
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            actual_num_epochs += 1
+            train_result = self.train_epoch(dl_train, **kw)
+            test_result = self.test_epoch(dl_test, **kw)
+            train_loss += [sum(x for x in train_result.losses) / len(train_result.losses)]
+            train_acc.append(train_result.accuracy)
+            test_loss += [sum(x for x in test_result.losses) / len(test_result.losses)]
+            test_acc.append(test_result.accuracy)
+                
+            if early_stopping is not None:
+                curr_loss = test_loss[-1]
+                if curr_loss >= prev_loss:
+                    epochs_without_improvement += 1
+                else:
+                    epochs_without_improvement = 0
+                    save_checkpoint = True
+                if epochs_without_improvement == early_stopping:
+                    break
+                prev_loss = curr_loss
             # ========================
 
             # Save model checkpoint if requested
@@ -207,14 +225,14 @@ class RNNTrainer(Trainer):
     def train_epoch(self, dl_train: DataLoader, **kw):
         # TODO: Implement modifications to the base method, if needed.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.h = None
         # ========================
         return super().train_epoch(dl_train, **kw)
 
     def test_epoch(self, dl_test: DataLoader, **kw):
         # TODO: Implement modifications to the base method, if needed.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.h = None
         # ========================
         return super().test_epoch(dl_test, **kw)
 
@@ -231,7 +249,13 @@ class RNNTrainer(Trainer):
         # - Update params
         # - Calculate number of correct char predictions
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.optimizer.zero_grad()
+        scores, self.h = self.model(x, self.h)
+        loss = self.loss_fn(scores.view(-1, scores.shape[2]), y.view(-1))
+        loss.backward()
+        self.optimizer.step()
+        num_correct = torch.sum((torch.argmax(scores, dim=2) == y).float())
+        self.h = self.h.detach()
         # ========================
 
         # Note: scaling num_correct by seq_len because each sample has seq_len
@@ -250,7 +274,9 @@ class RNNTrainer(Trainer):
             # - Loss calculation
             # - Calculate number of correct predictions
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            scores, self.h = self.model(x, self.h)
+            num_correct = torch.sum((torch.argmax(scores, dim=2) == y).float())
+            loss = self.loss_fn(scores.view(-1, scores.shape[2]), y.view(-1))
             # ========================
 
         return BatchResult(loss.item(), num_correct.item() / seq_len)

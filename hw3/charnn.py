@@ -22,7 +22,11 @@ def char_maps(text: str):
     # It's best if you also sort the chars before assigning indices, so that
     # they're in lexical order.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    char_to_idx, idx_to_char = {}, {}
+    chars = set(text)
+    for id, c in enumerate(chars):
+        char_to_idx[c] = id
+        idx_to_char[id] = c
     # ========================
     return char_to_idx, idx_to_char
 
@@ -38,7 +42,8 @@ def remove_chars(text: str, chars_to_remove):
     """
     # TODO: Implement according to the docstring.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    text_clean = re.sub(r'[{}]'.format(''.join(chars_to_remove)), '', text)
+    n_removed = len(text) - len(text_clean)
     # ========================
     return text_clean, n_removed
 
@@ -58,7 +63,8 @@ def chars_to_onehot(text: str, char_to_idx: dict) -> Tensor:
     """
     # TODO: Implement the embedding.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    indices = [char_to_idx.get(char, 0) for char in text]
+    result = torch.nn.functional.one_hot(torch.tensor(indices), num_classes=len(char_to_idx)).to(torch.int8)
     # ========================
     return result
 
@@ -75,7 +81,9 @@ def onehot_to_chars(embedded_text: Tensor, idx_to_char: dict) -> str:
     """
     # TODO: Implement the reverse-embedding.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    indices = torch.argmax(embedded_text, dim=1)
+    chars = [idx_to_char[index.item()] for index in indices]
+    result = ''.join(chars)
     # ========================
     return result
 
@@ -104,7 +112,9 @@ def chars_to_labelled_samples(text: str, char_to_idx: dict, seq_len: int,
     # 3. Create the labels tensor in a similar way and convert to indices.
     # Note that no explicit loops are required to implement this function.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    embedded_text = chars_to_onehot(text, char_to_idx).to(device)
+    samples = torch.stack(embedded_text[:-1].split(seq_len)[:-1])
+    labels = torch.stack(embedded_text[1:].split(seq_len)[:-1]).argmax(dim=2)
     # ========================
     return samples, labels
 
@@ -120,7 +130,7 @@ def hot_softmax(y, dim=0, temperature=1.0):
     """
     # TODO: Implement based on the above.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    result = torch.nn.functional.softmax(y / temperature, dim=dim)
     # ========================
     return result
 
@@ -156,7 +166,15 @@ def generate_from_model(model, start_sequence, n_chars, char_maps, T):
     # necessary for this. Best to disable tracking for speed.
     # See torch.no_grad().
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    with torch.no_grad():
+        x = chars_to_onehot(start_sequence, char_to_idx).to(device).view(1, len(start_sequence), len(char_to_idx))
+        h = None
+        for i in range(n_chars - len(start_sequence)):
+            y, h = model(x, h)
+            y = hot_softmax(y[0,-1,:], dim=0, temperature=T)
+            x = torch.multinomial(y, 1)
+            out_text += idx_to_char[x.item()]
+            x = chars_to_onehot(idx_to_char[x.item()], char_to_idx).to(device).view(1, 1, len(char_to_idx))
     # ========================
 
     return out_text
@@ -200,7 +218,21 @@ class MultilayerGRU(nn.Module):
         #     then call self.register_parameter() on them. Also make
         #     sure to initialize them. See functions in torch.nn.init.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        layers_dims = [in_dim] + [h_dim]*(n_layers)
+        
+        for i in range(n_layers):
+            
+            for layer_type in ['z', 'r', 'g']:
+                activation = nn.Tanh() if layer_type == 'g' else nn.Sigmoid()
+                layer = nn.Sequential(nn.Linear(layers_dims[i]+layers_dims[i+1], layers_dims[i+1]), activation)
+                self.layer_params.append(layer)
+                self.add_module(f'{layer_type}_{i}', layer)
+                
+            self.layer_params.append(nn.Dropout(dropout))
+            self.add_module(f'dropout_{i}', self.layer_params[-1])
+            
+        self.layer_params.append(nn.Linear(h_dim, out_dim))
+        self.add_module(f'out', self.layer_params[-1])
         # ========================
 
     def forward(self, input: Tensor, hidden_state: Tensor=None):
@@ -235,6 +267,30 @@ class MultilayerGRU(nn.Module):
         # Tip: You can use torch.stack() to combine multiple tensors into a
         # single tensor in a differentiable manner.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        layer_outputs = []
+            
+        for t in range(seq_len):
+            input_t = layer_input[:, t, :]
+            
+            for l in range(self.n_layers):
+                hidden_l = layer_states[l]
+                xh = torch.cat((input_t, hidden_l), dim=1)
+                
+                z = getattr(self, f'z_{l}')(xh)
+                r = getattr(self, f'r_{l}')(xh)
+                
+                xh = torch.cat((input_t, r * hidden_l), dim=1)
+                g = getattr(self, f'g_{l}')(xh)
+                h = z * hidden_l + (1-z) * g
+                
+                layer_states[l] = h
+                input_t = getattr(self, f'dropout_{l}')(h)
+                
+            layer_output = getattr(self, f'out')(input_t)
+            layer_outputs.append(layer_output)
+        
+        layer_output = torch.stack(layer_outputs, dim=1)
+        hidden_state = torch.stack(layer_states, dim=1)
         # ========================
         return layer_output, hidden_state
+
