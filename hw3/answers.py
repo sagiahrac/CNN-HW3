@@ -71,35 +71,43 @@ def part2_vae_hyperparams():
     )
     # TODO: Tweak the hyperparameters to generate a former president.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    hypers = dict(
+        batch_size=16,
+        h_dim=1024, z_dim=128, x_sigma2=0.1,
+        learn_rate=0.0001, betas=(0.9, 0.999),
+    )
     # ========================
     return hypers
 
 
 part2_q1 = r"""
-**Your answer:**
+Given the latent vector z:
+$p _{\bb{\beta}}(\bb{X} | \bb{z}) = \mathcal{N}( \Psi _{\bb{\beta}}(\bb{z}) , \sigma^2 \bb{I} )$
+In other words, x_sigma2 represents the variance of the reconstructed data. It controls the weighting of these two components in the VAE loss.
 
+- Low x_sigma2:
+When x_sigma2 is small, the model assumes that the reconstruction should be very close to the original input.
+It can make the model more prone to overfitting, as it becomes sensitive to noise and small variations in the input data.
+Consequently, a low x_sigma2 can lead to less diverse and less realistic reconstructions.
 
-Write your answer using **markdown** and $\LaTeX$:
-```python
-# A code block
-a = 2
-```
-An equation: $e^{i\pi} -1 = 0$
-
+- High x_sigma2:
+A higher x_sigma2 value allows the model to generate more diverse samples, as it is less constrained by adhering to the input data.
+However, a high x_sigma2 may result in reconstructions far from the original input, which can lead to blurry or less realistic reconstructions.
+Additionally, a large x_sigma2 can reduce the impact of the KL divergence term, which may result in a less structured or less interpretable latent space.
 """
 
 part2_q2 = r"""
-**Your answer:**
+1. 
+- Reconstruction loss - ensures the VAE learns to accurately reconstruct the input data. It promotes faithful reproduction of the input patterns.
+- KL divergence loss - regularizes the latent space of the VAE. 
+This encourages the VAE to learn a smooth and continuous latent representation (close to gaussian, typically).
 
+2. The KL divergence loss regularizes the latent space by aligning it with a prior distribution. 
+It encourages the VAE to learn a **smooth and continuous latent representation**.
 
-Write your answer using **markdown** and $\LaTeX$:
-```python
-# A code block
-a = 2
-```
-An equation: $e^{i\pi} -1 = 0$
-
+3. The benefit is that the VAE can generate diverse and meaningful samples by sampling from the learned latent space. 
+It enables meaningful interpolation between samples, and allows for the generation of new samples by sampling from the latent space.
+It also allows for reconstructing specific features of the input data by manipulating the latent representation.
 """
 
 # ==============
