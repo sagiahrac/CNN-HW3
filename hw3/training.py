@@ -58,7 +58,7 @@ class Trainer(abc.ABC):
 
         best_acc = None
         epochs_without_improvement = 0
-        prev_loss = float('inf')
+        best_loss = float('inf')
 
         checkpoint_filename = None
         if checkpoints is not None:
@@ -96,14 +96,13 @@ class Trainer(abc.ABC):
                 
             if early_stopping is not None:
                 curr_loss = test_loss[-1]
-                if curr_loss >= prev_loss:
+                if curr_loss >= best_loss:
                     epochs_without_improvement += 1
                 else:
                     epochs_without_improvement = 0
                     save_checkpoint = True
                 if epochs_without_improvement == early_stopping:
                     break
-                prev_loss = curr_loss
             # ========================
 
             # Save model checkpoint if requested
